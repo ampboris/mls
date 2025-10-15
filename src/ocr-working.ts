@@ -125,19 +125,94 @@ class OCRMCQExtractor {
         console.warn(`Only found ${options.length} labeled options, looking for unlabeled text blocks...`);
         
         const foundIds = new Set(options.map(opt => opt.id.toUpperCase()));
+        const missingIds = ['A', 'B', 'C', 'D'].filter(id => !foundIds.has(id));
         
-        // Specifically look for the unlabeled option B text
-        if (!foundIds.has('B')) {
-          // Option B appears between option A and option C in the raw text
-          const optionBPattern = /Use a subset of the survey responses to train an Amazon Comprehend custom entity recognition to identify Pll data in the survey responses/i;
-          const optionBMatch = cleanText.match(optionBPattern);
+        if (missingIds.length > 0) {
+          // Strategy: Analyze text structure to find unlabeled options
+          // Look for text segments that appear between known options or after question
           
-          if (optionBMatch) {
+          console.warn(`Missing option IDs: ${missingIds.join(', ')}`);
+          
+          // Create markers for known positions in the text
+          const optionPositions: Array<{id: string, start: number, end: number}> = [];
+          
+          for (const option of options) {
+            const pattern = new RegExp(`\\(${option.id}\\)`, 'i');
+            const match = cleanText.match(pattern);
+            if (match && match.index !== undefined) {
+              optionPositions.push({
+                id: option.id,
+                start: match.index,
+                end: match.index + match[0].length
+              });
+            }
+          }
+          
+          // Sort by position in text
+          optionPositions.sort((a, b) => a.start - b.start);
+          
+          // Look for text segments that could be unlabeled options
+          const candidateTexts: string[] = [];
+          
+          // Strategy 1: Look for text between option markers
+          for (let i = 0; i < optionPositions.length - 1; i++) {
+            const currentOption = optionPositions[i];
+            const nextOption = optionPositions[i + 1];
+            
+            // Extract text between this option and the next
+            const betweenText = cleanText.substring(
+              currentOption.end,
+              nextOption.start
+            ).trim();
+            
+            // Look for substantial text that looks like an option
+            if (betweenText.length > 50) {
+              // Split by common sentence endings and take meaningful chunks  
+              const chunks = betweenText.split(/[.!?]\s+/)
+                .filter(chunk => chunk.trim().length > 30);
+              
+              for (const chunk of chunks) {
+                const cleanChunk = chunk.trim().replace(/\s+/g, ' ');
+                
+                // Check if this looks like an option (contains action words)
+                if (cleanChunk.match(/^(Use|Send|Create|Build|Configure|Train|Deploy|Implement)/i) ||
+                    cleanChunk.includes('Amazon') ||
+                    cleanChunk.includes('API')) {
+                  candidateTexts.push(cleanChunk);
+                  break; // Only take first valid chunk from this segment
+                }
+              }
+            }
+          }
+          
+          // Strategy 2: If we still don't have enough, look for action-verb sentences
+          if (candidateTexts.length < missingIds.length) {
+            const actionSentences = cleanText.match(/(?:^|\s)((?:Use|Send|Create|Build|Configure|Train|Deploy|Implement)[^.!?]*[.!?]?)/gi) || [];
+            
+            for (const sentence of actionSentences) {
+              const cleanSentence = sentence.trim().replace(/\s+/g, ' ');
+              
+              // Skip if already found in options or candidates
+              const alreadyFound = [...options, ...candidateTexts.map(t => ({text: t}))].some(item =>
+                item.text.toLowerCase().substring(0, 30) === cleanSentence.toLowerCase().substring(0, 30)
+              );
+              
+              if (!alreadyFound && cleanSentence.length > 40) {
+                candidateTexts.push(cleanSentence);
+              }
+            }
+          }
+          
+          // Assign candidates to missing IDs
+          for (let i = 0; i < Math.min(missingIds.length, candidateTexts.length); i++) {
+            const missingId = missingIds[i];
+            const candidateText = candidateTexts[i];
+            
             options.push({
-              id: 'B',
-              text: 'Use a subset of the survey responses to train an Amazon Comprehend custom entity recognition to identify Pll data in the survey responses'
+              id: missingId,
+              text: candidateText
             });
-            console.log(`Found unlabeled option B: "Use a subset of the survey responses to train an Amazon..."`);
+            console.log(`Found unlabeled option ${missingId}: "${candidateText.substring(0, 50)}..."`);
           }
         }
         
