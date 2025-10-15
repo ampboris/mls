@@ -379,10 +379,27 @@ async function main() {
       const jsonFile = outputFile.replace(/\.txt$/, '.json');
       fs.writeFileSync(jsonFile, jsonOutput, 'utf8');
       
+      // Generate raw OCR output file
+      const orgFile = outputFile.replace(/\.txt$/, '.org.txt');
+      let rawOcrOutput = `Raw OCR Text Output\n`;
+      rawOcrOutput += `Generated on: ${new Date().toISOString()}\n`;
+      rawOcrOutput += `Total Files Processed: ${questions.length}\n`;
+      rawOcrOutput += `${'='.repeat(80)}\n\n`;
+      
+      questions.forEach((q, index) => {
+        rawOcrOutput += `FILE ${index + 1}: ${q.filename}\n`;
+        rawOcrOutput += `${'─'.repeat(40)}\n`;
+        rawOcrOutput += `${q.rawText || 'No raw text available'}\n\n`;
+        rawOcrOutput += `${'='.repeat(80)}\n\n`;
+      });
+      
+      fs.writeFileSync(orgFile, rawOcrOutput, 'utf8');
+      
       console.log(`\n✓ Successfully extracted ${questions.length} questions using OCR`);
       console.log(`✓ Text output saved to: ${outputFile}`);
       console.log(`✓ JSON output saved to: ${jsonFile}`);
-      console.log(`\nYou can upload either file to an AI chatbot for analysis.`);
+      console.log(`✓ Raw OCR output saved to: ${orgFile}`);
+      console.log(`\nYou can upload any of these files to an AI chatbot for analysis.`);
     } else {
       console.log('No questions were successfully extracted.');
     }
