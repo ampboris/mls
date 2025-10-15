@@ -2,9 +2,66 @@
 
 ## Overview
 
-A TypeScript/Node.js console application that extracts multiple choice questions from PNG images and converts them into a structured text format suitable for AI chatbot analysis.
+A TypeScript/Node.js console application that extracts multiple choice questions from PNG images and converts them into structured text and JSON formats suitable for AI chatbot analysis. Uses system-level Tesseract OCR for reliable text extraction with intelligent parsing and error correction.
 
-## Project Development Session
+## Quick Start
+
+### Prerequisites
+- Node.js (v16+ recommended)
+- macOS with Homebrew OR Ubuntu/Debian with apt
+
+### Installation & Setup
+
+1. **Install System Tesseract OCR:**
+   ```bash
+   # macOS
+   brew install tesseract
+   
+   # Ubuntu/Debian  
+   sudo apt install tesseract-ocr
+   ```
+
+2. **Install Node Dependencies:**
+   ```bash
+   npm install
+   ```
+
+3. **Verify Installation:**
+   ```bash
+   tesseract --version  # Should show v5.x
+   npm run extract docs extracted-output.txt
+   ```
+
+### Basic Usage
+
+**Extract questions from PNG images:**
+```bash
+# OCR extraction (recommended)
+npm run extract [directory] [output-filename]
+npm run extract docs my-questions.txt
+# Creates: my-questions.txt, my-questions.json, and my-questions.org.txt
+
+# Manual extraction (fallback)
+npm run extract-manual docs my-questions.txt
+# Creates: my-questions.txt and my-questions.json
+```
+
+**Example with sample question:**
+```bash
+npm run extract docs sample-output.txt
+# Processes docs/sample.png
+# Creates: sample-output.txt, sample-output.json, and sample-output.org.txt
+```
+
+## How It Works
+
+1. **Image Processing**: Scans directory for PNG files
+2. **OCR Extraction**: Uses Tesseract to extract raw text
+3. **Smart Parsing**: Identifies question IDs, question text, and options with intelligent fallback for missing labels
+4. **Error Correction**: Handles common OCR artifacts and missing option markers
+5. **Triple Output**: Generates structured text, JSON data, and raw OCR text for maximum flexibility
+
+## Development Session History
 
 ### Initial Requirements
 - Read PNG files containing multiple choice questions (like exam questions)
@@ -120,53 +177,190 @@ TECHNICAL NOTES:
 - Questions with insufficient text or options are filtered out
 ```
 
-### Usage
+## Project Structure & Implementation
 
-#### Production OCR Implementation ✅
-```bash
-# Extract MCQs using OCR (primary method)
-npm run extract [directory] [output-file]
-
-# Example - generates both .txt and .json files
-npm run extract docs extracted-questions-ocr.txt
-# Creates: extracted-questions-ocr.txt and extracted-questions-ocr.json
+### Current Architecture
+```
+mls/
+├── package.json                 # Node.js project configuration
+├── tsconfig.json               # TypeScript configuration (CommonJS)
+├── README.md                   # This documentation
+├── docs/
+│   └── sample.png              # Sample MCQ image for testing
+├── src/
+│   ├── ocr-working.ts           # Production OCR implementation ✅
+│   └── simple-extractor.ts      # Manual fallback implementation
+├── extracted-questions.txt      # Manual extraction output (structured text)
+├── extracted-questions.json     # Manual extraction output (JSON data)
+├── extracted-questions-ocr.txt  # OCR extraction output (structured text) ✅
+├── extracted-questions-ocr.json # OCR extraction output (JSON data) ✅
+└── extracted-questions-ocr.org.txt # OCR extraction output (raw OCR text) ✅
 ```
 
-#### Fallback Manual Implementation
-```bash
-# Use manual extraction as backup - also generates both formats
-npm run extract-manual [directory] [output-file]
+### Core Components
+- **OCR Engine**: System Tesseract v5.5.1 with node-tesseract-ocr wrapper
+- **Text Processing**: Multi-pattern regex parsing with intelligent missing option detection
+- **Output Formatting**: Triple format generation (structured text + JSON + raw OCR)
+- **Error Handling**: Graceful degradation with detailed logging and debugging support
+- **TypeScript**: Full type safety with CommonJS configuration (es2020 target)
+
+### Output Formats
+
+**1. Human-Readable Text Format (.txt):**
+```
+Multiple Choice Questions Extracted from PNG Images (OCR)
+Generated on: 2025-10-15T00:41:58.937Z
+Total Questions: 1
+================================================================================
+
+QUESTION 1
+ID: Q302
+Source: sample.png
+────────────────────────────────────────
+Q: A developer wants to build an application that detects...
+
+A) Use a subset of the survey responses to train...
+B) Use a subset of the survey responses to train an Amazon Comprehend custom entity recognition...
+C) Send the survey responses to the Amazon Comprehend DetectPiiEntities API...
+D) Send a subset of the survey responses to the Amazon Comprehend DetectPiiEntities API...
 ```
 
-#### Installation Requirements (Already Completed)
+**2. Structured JSON Format (.json):**
+```json
+{
+  "metadata": {
+    "generatedOn": "2025-10-15T00:41:58.940Z",
+    "totalQuestions": 1,
+    "extractionMethod": "OCR (Tesseract v5.x)",
+    "filesProcessed": ["sample.png"]
+  },
+  "questions": [
+    {
+      "questionNumber": 1,
+      "questionId": "Q302", 
+      "sourceFile": "sample.png",
+      "questionText": "...",
+      "options": [
+        {"id": "A", "text": "..."},
+        {"id": "B", "text": "..."},
+        {"id": "C", "text": "..."},
+        {"id": "D", "text": "..."}
+      ]
+    }
+  ]
+}
+```
 
-**System Dependencies:**
+**3. Raw OCR Text Format (.org.txt):**
+```
+Raw OCR Text Output
+Generated on: 2025-10-15T00:41:58.490Z
+Total Files Processed: 1
+================================================================================
+
+FILE 1: sample.png
+────────────────────────────────────────
+(£23322) Q302. A developer wants to build an application that detects when customers enter personally identifiable information (Pll).
+such as bank account numbers. into a customer survey before those responses are saved into a third-party database as records. [...]
+
+(A) Use a subset of the survey responses to train an Amazon Comprehend custom classifier to determine which documents contain Pll data
+
+Use a subset of the survey responses to train an Amazon Comprehend custom entity recognition to identify Pll data in the survey
+responses
+
+(c) Send the survey responses to the Amazon Comprehend DetectPiiEntities API to identify Pll data in the survey responses
+
+(D) Send a subset of the survey responses to the Amazon Comprehend DetectPiiEntities API to identify Pll data in the survey responses
+```
+
+## Troubleshooting & Debug Guide
+
+### Common Issues & Solutions
+
+#### 1. `TypeError: Unknown file extension ".ts"`
+**Problem**: TypeScript files not recognized when running npm scripts
 ```bash
-# macOS (✅ Installed)
+TypeError: Unknown file extension ".ts" for /path/to/file.ts
+```
+**Solution**: Project uses CommonJS configuration for better compatibility
+- ✅ **Fixed**: Removed `"type": "module"` from package.json
+- ✅ **Fixed**: Updated tsconfig.json to use CommonJS
+- ✅ **Fixed**: Simplified npm scripts without --esm flags
+
+#### 2. `This regular expression flag is only available when targeting 'es2018' or later`
+**Problem**: Modern regex features not supported
+```bash
+error TS1501: This regular expression flag is only available when targeting 'es2018' or later
+```
+**Solution**: Updated TypeScript target
+- ✅ **Fixed**: Changed `"target": "es2016"` to `"target": "es2020"` in tsconfig.json
+
+#### 3. Tesseract OCR Not Found
+**Problem**: System Tesseract not installed
+```bash
+Error: spawn tesseract ENOENT
+```
+**Solution**: Install system Tesseract
+```bash
+# macOS
 brew install tesseract
 
 # Ubuntu/Debian
 sudo apt install tesseract-ocr
+
+# Verify installation
+tesseract --version
 ```
 
-**Node Dependencies:**
+#### 4. Network Fetch Errors (Legacy Issue)
+**Problem**: Early versions used Tesseract.js with network dependencies
 ```bash
-# Already installed in this project
-npm install node-tesseract-ocr
-npm install --save-dev typescript @types/node ts-node
+Error: TypeError: fetch failed
+```
+**Solution**: Switched to system Tesseract (no longer an issue)
+- ✅ **Fixed**: Removed tesseract.js dependency
+- ✅ **Fixed**: Using node-tesseract-ocr with system Tesseract
 
-# Note: Removed unused dependencies (tesseract.js, jimp) for cleaner installation
+#### 5. Poor OCR Quality
+**Problem**: Text extraction incomplete or inaccurate
+**Debug Steps**:
+1. Check image quality - ensure high contrast, clear text
+2. Review raw OCR output in console
+3. Verify PNG files are in correct directory
+4. Try manual extraction as fallback: `npm run extract-manual`
+
+#### 6. No Questions Extracted
+**Problem**: OCR runs but no structured output generated
+**Debug Steps**:
+1. Check console for "Raw OCR text preview"
+2. Verify question format (expects A), B), C), D) options)
+3. Ensure question IDs present (Q302, etc.)
+4. Review parsing warnings in output
+
+### Debug Commands
+```bash
+# Test with verbose output
+npm run extract docs debug-output.txt
+
+# Check system requirements
+tesseract --version
+node --version
+npm --version
+
+# Verify project structure
+ls -la docs/
+ls -la src/
 ```
 
-### Key Learnings & Implementation Notes
+### Development Session Technical Notes
 
-#### Technical Challenges Overcome
+#### Challenges Overcome During Development
 
 1. **Network Dependencies**: Browser-based OCR libraries (Tesseract.js) have runtime network requirements
    - **Solution**: Switched to system-level Tesseract with node-tesseract-ocr wrapper
    - **Result**: No network dependencies, more reliable extraction
 
-2. **ESM vs CommonJS**: Initial attempt with ESM modules caused execution issues
+2. **Module System Compatibility**: ESM vs CommonJS configuration conflicts
    - **Problem**: `ts-node` with ESM requires special configuration and --esm flags
    - **Solution**: Reverted to CommonJS for better ts-node compatibility
    - **Result**: Simpler configuration, reliable execution across environments
@@ -179,53 +373,48 @@ npm install --save-dev typescript @types/node ts-node
    - **Solution**: Multi-pattern matching with text cleanup algorithms
    - **Result**: Successfully extracted structured MCQ data from image
 
-5. **TypeScript ESM Module Issues**: `ts-node` with ESM modules caused file extension errors
-   - **Problem**: `TypeError: Unknown file extension ".ts"` when using `"type": "module"`
-   - **Solution**: Switched from ESM to CommonJS configuration
-   - **Result**: Clean ts-node execution without --esm flags
-
-6. **ES2016 Target Limitation**: Modern regex features not supported in older JavaScript targets
-   - **Problem**: `This regular expression flag is only available when targeting 'es2018' or later`
-   - **Solution**: Updated TypeScript target from es2016 to es2020
-   - **Result**: Full regex feature support for text parsing
-
 #### Implementation Success Metrics
-
 - ✅ **OCR Accuracy**: Successfully extracted Q302 question with 3 options
 - ✅ **Text Processing**: Intelligent parsing handled OCR artifacts (Pll vs PII)
 - ✅ **Error Recovery**: Graceful fallback when parsing fails
 - ✅ **Production Ready**: No network dependencies, reliable system integration
 - ✅ **Cross-platform Compatibility**: Works reliably in zsh, bash, and other terminal environments
 - ✅ **Simple Execution**: Clean `npm run extract` commands without complex flags
+- ✅ **Triple Output**: Automatic generation of structured text, JSON, and raw OCR formats
+- ✅ **Missing Option Recovery**: Intelligent detection of unlabeled options (fixed Option B bug)
 
-### Files Ready for AI Analysis
+## Use Cases & Integration
 
-Multiple output formats are generated for maximum compatibility:
+### Output Format Usage
 
 **Text Format (.txt files):**
-1. **`extracted-questions-ocr.txt`** - OCR-extracted questions (human-readable)
-2. **`extracted-questions.txt`** - Manual extraction (human-readable)
+- Upload directly to ChatGPT, Claude, or other AI chatbots
+- Human-readable format for conversational analysis
+- Perfect for educational assessment and feedback
 
 **JSON Format (.json files):**
-1. **`extracted-questions-ocr.json`** - OCR-extracted questions (structured data)
-2. **`extracted-questions.json`** - Manual extraction (structured data)
+- Import into applications, databases, or programming environments
+- Structured data for automated processing
+- API integration and bulk question analysis
 
-**Use cases for different formats:**
-- **Text files**: Upload to ChatGPT, Claude, or other AI chatbots for conversational analysis
-- **JSON files**: Import into applications, databases, or programming environments
-- **Both formats**: Question analysis, answer validation, educational assessment, bulk processing
+**Raw OCR Format (.org.txt files):**
+- Debug OCR extraction issues and quality problems
+- Analyze text recognition accuracy and artifacts
+- Research OCR performance with different image types
+- Troubleshoot parsing failures and missing content
+- Compare raw OCR output with final structured results
 
-### Development Architecture
+### Common Applications
+- **Educational Assessment**: Question analysis and categorization with full 4-option support
+- **Exam Preparation**: Bulk processing of practice questions with error recovery
+- **Content Analysis**: Answer validation and explanation generation  
+- **Database Import**: Structured question banks for applications
+- **Quality Assurance**: Verification of question formatting and completeness
+- **OCR Research**: Analysis of text extraction accuracy and improvements
 
-**Core Components:**
-- **OCR Engine**: System Tesseract v5.5.1 with node-tesseract-ocr wrapper
-- **Text Processing**: Multi-pattern regex parsing with error correction
-- **Output Formatting**: Structured text optimized for AI consumption
-- **Error Handling**: Graceful degradation with detailed logging
-- **TypeScript**: Full type safety with Node.js CommonJS configuration (es2020 target)
-
-**Extensibility:**
-- Modular design supports additional image formats
-- Configurable OCR parameters for different image types  
-- Plugin architecture for custom parsing rules
-- Batch processing capability for multiple directories
+### Extensibility Features
+- **Modular Design**: Supports additional image formats beyond PNG
+- **Configurable OCR**: Adjustable parameters for different image types
+- **Plugin Architecture**: Custom parsing rules for specialized question formats
+- **Batch Processing**: Handle multiple directories and file types
+- **Error Reporting**: Detailed logging for troubleshooting and optimization
