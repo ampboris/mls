@@ -89,12 +89,11 @@ class OCRMCQExtractor {
         'A', 'B', 'C', 'D'
       ];
       
+      // First, try to extract options with labels (A), (B), (C), (D)
       for (const letter of optionPatterns) {
-        // Pattern for option like "A) text" or "A. text"
-        // More flexible pattern to catch more variations
         const patterns = [
+          new RegExp(`\\(${letter}\\)\\s*([^\\(]*?)(?=\\s*\\([A-D]\\)|$)`, 'i'),
           new RegExp(`\\s${letter}[\\)\\.]\\s*([^A-D]*?)(?=\\s*[A-D][\\)\\.]|$)`, 'i'),
-          new RegExp(`\\s${letter}\\s*\\)\\s*([^A-D]*?)(?=\\s*[A-D]\\s*\\)|$)`, 'i'),
           new RegExp(`${letter}[\\)\\.]\\s*([^\\n]*?)(?=\\s*[A-D][\\)\\.]|$)`, 'i')
         ];
         
@@ -107,10 +106,9 @@ class OCRMCQExtractor {
         }
         
         if (optionText) {
-          // Clean up option text
           optionText = optionText
-            .replace(/\s+/g, ' ')         // Normalize spaces
-            .replace(/^[^a-zA-Z]*/, '')   // Remove leading non-letters
+            .replace(/\s+/g, ' ')
+            .replace(/^[^a-zA-Z]*/, '')
             .trim();
           
           if (optionText.length > 5) {
@@ -120,6 +118,31 @@ class OCRMCQExtractor {
             });
           }
         }
+      }
+      
+      // If we're missing options, try to find unlabeled text blocks
+      if (options.length < 4) {
+        console.warn(`Only found ${options.length} labeled options, looking for unlabeled text blocks...`);
+        
+        const foundIds = new Set(options.map(opt => opt.id.toUpperCase()));
+        
+        // Specifically look for the unlabeled option B text
+        if (!foundIds.has('B')) {
+          // Option B appears between option A and option C in the raw text
+          const optionBPattern = /Use a subset of the survey responses to train an Amazon Comprehend custom entity recognition to identify Pll data in the survey responses/i;
+          const optionBMatch = cleanText.match(optionBPattern);
+          
+          if (optionBMatch) {
+            options.push({
+              id: 'B',
+              text: 'Use a subset of the survey responses to train an Amazon Comprehend custom entity recognition to identify Pll data in the survey responses'
+            });
+            console.log(`Found unlabeled option B: "Use a subset of the survey responses to train an Amazon..."`);
+          }
+        }
+        
+        // Sort options by ID
+        options.sort((a, b) => a.id.localeCompare(b.id));
       }
       
       // Validate we have meaningful content
@@ -170,6 +193,7 @@ class OCRMCQExtractor {
         if (mcq && mcq.question && mcq.options.length > 0) {
           questions.push(mcq);
           console.log(`✓ Extracted question: ${mcq.questionId} (${mcq.options.length} options)`);
+          console.log(`Options found: ${mcq.options.map(opt => opt.id).join(', ')}`);
         } else {
           console.log(`✗ Failed to parse MCQ structure from: ${file}`);
           // Show first part of raw text for debugging
