@@ -44,34 +44,53 @@ class OCRMCQExtractor {
       const questionId = questionIdMatch?.[1] || `Q_${filename.replace('.png', '')}`;
       
       // Find the main question text
-      // Strategy: Look for patterns that typically indicate questions
+      // Strategy: Extract everything from question ID to the final question mark or before options
       let questionText = '';
-      const questionPatterns = [
-        // Questions ending with question marks
-        /([^.]*(?:Which|What|How|Why|When|Where)[^?]*\?)/i,
-        // Questions before options pattern - simplified
-        /(.*?)(?=\s*A[\)\.])/s,
-        // Questions containing "solution" or "requirements"
-        /([^.]*(?:solution|requirements|meet|build|application)[^.?]*[.?]?)/i
+      
+      // Remove the question ID prefix to get clean text
+      let textAfterQuestionId = cleanText;
+      const qIdMatch = cleanText.match(/(?:^|\s)([QE]\d{2,4})\b\.?\s*/i);
+      if (qIdMatch && qIdMatch.index !== undefined) {
+        textAfterQuestionId = cleanText.substring(qIdMatch.index + qIdMatch[0].length);
+      }
+      
+      // Strategy 1: Take everything before the first option or before unlabeled option text
+      // Look for the end of question context - before options start
+      const optionStartPatterns = [
+        /(?=\s*\([A-D]\))/i,                    // Before (A), (B), etc
+        /(?=\s*[A-D][\)\.])/i,                  // Before A), B), etc  
+        /(?=\s*Upload\s+the\s+data)/i,          // Before typical option text
+        /(?=\s*Use\s+a\s+subset)/i,             // Before typical option text
+        /(?=\s*Send\s+the)/i,                   // Before typical option text
+        /(?=\s*Create)/i,                       // Before typical option text
       ];
       
-      for (const pattern of questionPatterns) {
-        const match = cleanText.match(pattern);
-        if (match?.[1] && match[1].length > 50) { // Ensure it's substantial
-          questionText = match[1].trim();
-          break;
+      let questionEndIndex = textAfterQuestionId.length;
+      for (const pattern of optionStartPatterns) {
+        const match = pattern.exec(textAfterQuestionId);
+        if (match && match.index !== undefined && match.index < questionEndIndex) {
+          questionEndIndex = match.index;
         }
       }
       
-      // If no clear question found, take text before first option A
+      const beforeOptions = textAfterQuestionId.substring(0, questionEndIndex).trim();
+      if (beforeOptions && beforeOptions.length > 50) {
+        questionText = beforeOptions;
+      }
+      
+      // Strategy 2: If that didn't work, look for text ending with a question mark
       if (!questionText) {
-        const parts = cleanText.split(/\sA[\)\.]]/);
-        if (parts.length > 1) {
-          questionText = parts[0]?.trim() || '';
-        } else {
-          // Look for text before any letter + parenthesis pattern
-          const beforeOption = cleanText.split(/\s[A-D][\)\.]]/)[0];
-          questionText = beforeOption?.trim() || cleanText.substring(0, Math.min(cleanText.length, 300));
+        const questionWithMark = textAfterQuestionId.match(/(.*\?)/s);
+        if (questionWithMark?.[1]) {
+          questionText = questionWithMark[1].trim();
+        }
+      }
+      
+      // Strategy 3: Fallback - take substantial text from the beginning
+      if (!questionText) {
+        const fallbackText = textAfterQuestionId.substring(0, 500).trim();
+        if (fallbackText.length > 50) {
+          questionText = fallbackText;
         }
       }
       
