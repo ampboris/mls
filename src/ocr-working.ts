@@ -54,22 +54,45 @@ class OCRMCQExtractor {
         textAfterQuestionId = cleanText.substring(qIdMatch.index + qIdMatch[0].length);
       }
       
-      // Strategy 1: Take everything before the first option or before unlabeled option text
-      // Look for the end of question context - before options start
-      const optionStartPatterns = [
-        /(?=\s*\([A-D]\))/i,                    // Before (A), (B), etc
-        /(?=\s*[A-D][\)\.])/i,                  // Before A), B), etc  
-        /(?=\s*Upload\s+the\s+data)/i,          // Before typical option text
-        /(?=\s*Use\s+a\s+subset)/i,             // Before typical option text
-        /(?=\s*Send\s+the)/i,                   // Before typical option text
-        /(?=\s*Create)/i,                       // Before typical option text
+      // Strategy 1: Look for the end of question - prioritize question marks and "Which solution" patterns
+      let questionEndIndex = textAfterQuestionId.length;
+      
+      // First priority: Look for question ending patterns
+      const questionEndPatterns = [
+        /\?\s*(?=\s*\([A-D]\))/i,               // Question mark before options
+        /\?\s*(?=\s*[A-D][\)\.])/i,             // Question mark before A), B), etc
+        /effort\?\s*/i,                         // Common question ending
+        /requirements\?\s*/i,                   // Common question ending
+        /Which\s+solution[^?]*\?/i,             // "Which solution..." question
       ];
       
-      let questionEndIndex = textAfterQuestionId.length;
-      for (const pattern of optionStartPatterns) {
+      // Find the longest valid question text ending with a question mark
+      for (const pattern of questionEndPatterns) {
         const match = pattern.exec(textAfterQuestionId);
-        if (match && match.index !== undefined && match.index < questionEndIndex) {
-          questionEndIndex = match.index;
+        if (match && match.index !== undefined) {
+          const endPos = match.index + match[0].length;
+          if (endPos > 100) { // Ensure we have substantial question text
+            questionEndIndex = endPos;
+            break; // Take the first good match
+          }
+        }
+      }
+      
+      // Fallback: Look for options starting patterns only if no question mark found
+      if (questionEndIndex === textAfterQuestionId.length) {
+        const optionStartPatterns = [
+          /(?=\s*\([A-D]\))/i,                    // Before (A), (B), etc
+          /(?=\s*[A-D][\)\.])/i,                  // Before A), B), etc  
+          /(?=\s*Upload\s+the\s+data)/i,          // Before typical option text
+          /(?=\s*Use\s+a\s+subset)/i,             // Before typical option text
+          /(?=\s*Send\s+the)/i,                   // Before typical option text
+        ];
+        
+        for (const pattern of optionStartPatterns) {
+          const match = pattern.exec(textAfterQuestionId);
+          if (match && match.index !== undefined && match.index < questionEndIndex && match.index > 100) {
+            questionEndIndex = match.index;
+          }
         }
       }
       
